@@ -14,12 +14,14 @@
       buildInputs = [
         python313
         python313Packages.lxml
+        python313Packages.aiofiles
         libxml2
         libxslt
 
         nixfmt-rfc-style
         nixd
         uv
+        memray
       ];
 
       shellHook = ''

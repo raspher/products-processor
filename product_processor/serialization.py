@@ -34,7 +34,7 @@ class AsyncProductXMLReader(Generic[T]):
 
         try:
             # Wrap the blocking iterator in an async generator
-            for product in await asyncio.to_thread(lambda: list(blocking_iter())):
+            for product in await asyncio.to_thread(lambda: blocking_iter()):
                 yield product
         except Exception as e:
             logging.error(f"Error while parsing XML: {e}")
