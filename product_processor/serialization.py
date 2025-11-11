@@ -1,16 +1,24 @@
-from typing import Iterator, Iterable
+from typing import Iterator, Iterable, Type, TypeVar, Generic, cast
 from lxml import etree
 
 from product_processor.product import Product, Attribute
 
+# Generic type for product-like classes
+T = TypeVar("T", bound=Product)
 
-class ProductXMLReader:
+
+class ProductXMLReader(Generic[T]):
     """Streaming reader for <product> elements using lxml, memory-safe."""
 
-    def __init__(self, xml_file: str):
+    def __init__(self, xml_file: str, product_cls: Type[T]):
+        """
+        :param xml_file: Path to the XML file to read.
+        :param product_cls: Class to deserialize each <product> into.
+        """
         self.xml_file = xml_file
+        self.product_cls = product_cls
 
-    def stream_products(self) -> Iterator[Product]:
+    def stream_products(self) -> Iterator[T]:
         """Yield Product objects one by one from XML."""
         try:
             context = etree.iterparse(self.xml_file, events=("end",), tag="product")
@@ -20,17 +28,17 @@ class ProductXMLReader:
                     product = self._element_to_product(elem)
                     yield product
                 except Exception as e:
-                    print(e)
+                    print(f"Error while parsing <product>: {e}")
                 finally:
+                    # Free memory as we go
                     elem.clear()
                     while elem.getprevious() is not None:
                         del elem.getparent()[0]
-        except Exception:
-            print("Something went wrong!")
+        except Exception as e:
+            print(f"Failed to parse XML: {e}")
 
-    @staticmethod
-    def _element_to_product(elem: etree._Element) -> Product:
-        """Convert <product> element to Product dataclass."""
+    def _element_to_product(self, elem: etree._Element) -> T:
+        """Convert <product> element to product_cls dataclass."""
         kwargs = {}
 
         # Simple fields
@@ -69,18 +77,24 @@ class ProductXMLReader:
                 attributes.append(Attribute(name=name, value=value))
         kwargs["attributes"] = attributes
 
-        return Product(**kwargs)
+        return self.product_cls(**kwargs)
 
 
-class ProductXMLWriter:
-    """Streaming writer for Product objects using lxml, memory-efficient."""
+class ProductXMLWriter(Generic[T]):
+    """Streaming writer for Product-like objects using lxml, memory-efficient."""
 
-    def __init__(self, xml_file: str, indent: int = 4):
+    def __init__(self, xml_file: str, product_cls: Type[T], indent: int = 4):
+        """
+        :param xml_file: Path to XML file to write to.
+        :param product_cls: Class used for serialization (default: Product).
+        :param indent: Pretty-print indentation.
+        """
         self.xml_file = xml_file
         self.indent = indent
+        self.product_cls = product_cls
 
     @staticmethod
-    def _product_to_element(product: Product) -> etree.Element:
+    def _product_to_element(product: Product) -> etree._Element:
         elem = etree.Element("product")
 
         # Simple fields
@@ -93,8 +107,8 @@ class ProductXMLWriter:
             value = getattr(product, field)
             if value is not None:
                 child = etree.SubElement(elem, field)
-                # Wrap description fields in CDATA
                 if field.startswith("description") and isinstance(value, str):
+                    # Wrap long text fields in CDATA
                     child.text = etree.CDATA(value)
                 else:
                     child.text = str(value)
@@ -116,9 +130,9 @@ class ProductXMLWriter:
                 val_elem = etree.SubElement(attr_elem, "value")
                 val_elem.text = attr.value
 
-        return elem
+        return cast(etree._Element, cast(object, elem))
 
-    def save_products(self, products: Iterable[Product]) -> None:
+    def save_products(self, products: Iterable[T]) -> None:
         """Write products to XML file, one at a time."""
         with open(self.xml_file, "wb") as f:
             f.write(b"<?xml version='1.0' encoding='utf-8'?>\n")

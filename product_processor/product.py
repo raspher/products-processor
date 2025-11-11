@@ -29,6 +29,18 @@ class Product:
     images: List[str] = field(default_factory=list)
     attributes: List[Attribute] = field(default_factory=list)
 
+    def add_attribute(self, name: str, value: str):
+        """
+        Upsert an attribute: if an attribute with the given name exists,
+        update its value; otherwise, add a new attribute.
+        """
+        for attr in self.attributes:
+            if attr.name == name:
+                attr.value = value
+                return
+        # If not found, add new
+        self.attributes.append(Attribute(name=name, value=value))
+
 
 @dataclass
 class ProductWithName(Product):
