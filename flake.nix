@@ -19,6 +19,7 @@
 
         nixfmt-rfc-style
         nixd
+        uv
       ];
 
       shellHook = ''
@@ -31,8 +32,8 @@
       name = "xmlreader";
       tag = "latest";
       contents = [
-        python310Full
-        python310Packages.lxml
+        python313Full
+        python313Packages.lxml
         libxml2
         libxslt
         # optional: any other dependencies
