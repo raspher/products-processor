@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from dataclasses import fields
-from typing import AsyncIterator, Type, TypeVar, Generic, cast
+from typing import AsyncIterator, Type, TypeVar, Generic, cast, get_origin, List, get_args
 
 import aiofiles
 from lxml import etree
@@ -42,40 +42,48 @@ class AsyncProductXMLReader(Generic[T]):
             logging.error(f"Error while parsing XML: {e}")
 
     def _element_to_product(self, elem: etree._Element) -> T:
-        kwargs = {}
-        # Parse simple fields
+        kwargs: dict[str, object] = {}
+
         for field in fields(self.product_cls):
-            child = elem.find(field.name)
-            if child is not None and child.text is not None:
-                text = child.text
-                if Type[field.type] == Type[int]:
-                    kwargs[field.name] = int(text)
-                elif Type[field.type] == Type[float]:
-                    kwargs[field.name] = float(text)
-                else:
-                    kwargs[field.name] = text
+            field_name = field.name
+            field_type = field.type
+            child = elem.find(field_name)
 
-        # Images
-        images: list[str] = []
-        images_elem = elem.find("images")
-        if images_elem is not None:
-            for img_elem in images_elem.findall("image"):
-                if img_elem.text:
-                    images.append(img_elem.text)
-        kwargs["images"] = images
+            if child is None:
+                # For list fields (images, attributes), initialize empty
+                origin = get_origin(field_type)
+                if origin in (list, List):
+                    kwargs[field_name] = []
+                continue
 
-        # Attributes
-        attributes: list[Attribute] = []
-        attrs_elem = elem.find("attributes")
-        if attrs_elem is not None:
-            for attr_elem in attrs_elem.findall("attribute"):
-                name = attr_elem.find("attribute_name").text or ""
-                value = attr_elem.find("attribute_value").text or ""
-                if name and value:
-                    attributes.append(Attribute(name=name, value=value))
-        kwargs["attributes"] = attributes
+            # --- Handle attributes list ---
+            origin = get_origin(field_type)
+            args = get_args(field_type)
+            if origin in (list, List) and args and args[0] is Attribute:
+                attrs: list[Attribute] = []
+                for attr_elem in child.findall("attribute"):
+                    name_el = attr_elem.find("name")
+                    value_el = attr_elem.find("value")
+                    if name_el is not None and value_el is not None and name_el.text and value_el.text:
+                        attrs.append(Attribute(name=name_el.text.strip(), value=value_el.text.strip()))
+                kwargs[field_name] = attrs
+                continue
 
-        return self.product_cls(**kwargs)
+            # --- Handle basic types ---
+            if child.text is None:
+                continue
+
+            text = child.text.strip()
+            if field_type is int:
+                kwargs[field_name] = int(text)
+            elif field_type is float:
+                kwargs[field_name] = float(text)
+            elif field_type is bool:
+                kwargs[field_name] = text.lower() in {"1", "true", "yes"}
+            else:
+                kwargs[field_name] = text
+
+        return cast(T, self.product_cls(**kwargs))
 
 
 class AsyncProductXMLWriter(Generic[T]):
@@ -85,38 +93,33 @@ class AsyncProductXMLWriter(Generic[T]):
         self.xml_file = xml_file
         self.product_cls = product_cls
 
-    @staticmethod
-    def _product_to_element(product: Product) -> etree._Element:
+    def _product_to_element(self, product: Product) -> etree._Element:
         elem = etree.Element("product")
 
         # Simple fields
-        for field in [
-            "product_id", "name", "quantity", "ean", "sku",
-            "category_name", "manufacturer_name", "price",
-            "tax_rate", "weight", "width", "height", "length",
-            "description", "description_extra_1", "description_extra_2"
-        ]:
-            value = getattr(product, field)
-            if value is not None:
-                child = etree.SubElement(elem, field)
-                if field.startswith("description") and isinstance(value, str):
-                    child.text = etree.CDATA(value)
-                else:
-                    child.text = str(value)
+        for field in fields(self.product_cls):
+            value = getattr(product, field.name)
+            if value is None:
+                continue
 
-        # Images
-        if product.images:
-            images_elem = etree.SubElement(elem, "images")
-            for img in product.images:
-                etree.SubElement(images_elem, "image").text = str(img)
+            child: etree.Element = etree.SubElement(elem, field.name)
 
-        # Attributes
-        if product.attributes:
-            attrs_elem = etree.SubElement(elem, "attributes")
-            for attr in product.attributes:
-                attr_elem = etree.SubElement(attrs_elem, "attribute")
-                etree.SubElement(attr_elem, "name").text = attr.name
-                etree.SubElement(attr_elem, "value").text = attr.value
+            if field.name.startswith("description") and isinstance(value, str):
+                child.text = etree.CDATA(value)
+                continue
+
+            if field.name.startswith("image"):
+                child.text = value
+                continue
+
+            if field.name.startswith("attributes") and isinstance(value, list):
+                for attr in product.attributes:
+                    attr_elem = etree.SubElement(child, "attribute")
+                    etree.SubElement(attr_elem, "name").text = attr.name
+                    etree.SubElement(attr_elem, "value").text = attr.value
+                continue
+
+            child.text = str(value)
 
         return cast(etree._Element, cast(object, elem))
 
@@ -124,8 +127,6 @@ class AsyncProductXMLWriter(Generic[T]):
         """Write products asynchronously to an XML file."""
         async with aiofiles.open(self.xml_file, "wb") as f:
             await f.write(b"<?xml version='1.0' encoding='utf-8'?>\n<products>\n")
-
-            loop = asyncio.get_running_loop()
 
             async for product in products:
                 elem = self._product_to_element(product)
