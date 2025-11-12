@@ -22,12 +22,29 @@ class Product:
     width: float
     height: float
     length: float
-    description: str
-    manufacturer_name: str = ""
+    description: str = ""
     description_extra_1: Optional[str] = None
     description_extra_2: Optional[str] = None
-    images: List[str] = field(default_factory=list)
+    manufacturer_name: str = ""
+    purchase_price: str = ""
+    image: str = ""
+    image_extra_1: str = ""
+    image_extra_2: str = ""
+    image_extra_3: str = ""
+    image_extra_4: str = ""
+    image_extra_5: str = ""
+    image_extra_6: str = ""
+    image_extra_7: str = ""
+    image_extra_8: str = ""
+    image_extra_9: str = ""
+    image_extra_10: str = ""
+    image_extra_11: str = ""
+    image_extra_12: str = ""
+    image_extra_13: str = ""
+    image_extra_14: str = ""
+    image_extra_15: str = ""
     attributes: List[Attribute] = field(default_factory=list)
+    variants: str = ""
 
     def add_attribute(self, name: str, value: str):
         """
