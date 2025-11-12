@@ -43,23 +43,17 @@ class AsyncProductXMLReader(Generic[T]):
 
     def _element_to_product(self, elem: etree._Element) -> T:
         kwargs = {}
-
         # Parse simple fields
-        for field in [
-            "product_id", "name", "quantity", "ean", "sku",
-            "category_name", "manufacturer_name", "price",
-            "tax_rate", "weight", "width", "height", "length",
-            "description", "description_extra_1", "description_extra_2"
-        ]:
-            child = elem.find(field)
+        for field in fields(self.product_cls):
+            child = elem.find(field.name)
             if child is not None and child.text is not None:
                 text = child.text
-                if field in ("product_id", "quantity"):
-                    kwargs[field] = int(text)
-                elif field in ("price", "weight", "width", "height", "length"):
-                    kwargs[field] = float(text)
+                if Type[field.type] == Type[int]:
+                    kwargs[field.name] = int(text)
+                elif Type[field.type] == Type[float]:
+                    kwargs[field.name] = float(text)
                 else:
-                    kwargs[field] = text
+                    kwargs[field.name] = text
 
         # Images
         images: list[str] = []
