@@ -120,17 +120,19 @@ class AsyncProductXMLWriter(Generic[T]):
 
         return cast(etree._Element, cast(object, elem))
 
-    async def save_products(self, products: Iterable[T]) -> None:
+    async def save_products(self, products: AsyncIterator[T]) -> AsyncIterator[T]:
         """Write products asynchronously to an XML file."""
         async with aiofiles.open(self.xml_file, "wb") as f:
             await f.write(b"<?xml version='1.0' encoding='utf-8'?>\n<products>\n")
 
             loop = asyncio.get_running_loop()
 
-            for product in products:
-                elem = await loop.run_in_executor(None, self._product_to_element, product)
+            async for product in products:
+                elem = self._product_to_element(product)
                 xml_bytes = etree.tostring(elem, pretty_print=True, encoding="utf-8")
                 await f.write(xml_bytes)
                 elem.clear()
+
+                yield product
 
             await f.write(b"</products>\n")
