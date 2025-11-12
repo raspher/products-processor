@@ -1,3 +1,4 @@
+import re
 from typing import TypeVar, Generic, AsyncIterator, Callable, Awaitable
 
 from product_processor.product import Product, ProductWithName
@@ -36,6 +37,42 @@ class CopyNameToAttrs(Operation[T]):
         else:
             p.add_attribute("Nazwa", p.name)
         return p
+
+
+class FindPiecesCount(Operation[T]):
+    async def __call__(self, p: T) -> T:
+        match = re.search(r'(\d+)\s+elementów', p.name)
+
+        if match:
+            p.add_attribute("Całkowita liczba elementów", match.group(1))
+            return p
+
+        match = re.search(r'(\d+)\s+elem', p.name)
+
+        if match:
+            p.add_attribute("Całkowita liczba elementów", match.group(1))
+            return p
+
+        match = re.search(r'(\d+)\s+el\.', p.name)
+
+        if match:
+            p.add_attribute("Całkowita liczba elementów", match.group(1))
+
+        return p
+
+
+class CollectManufacturers(Operation[T]):
+    manufacturers: dict[str, int] = dict()
+
+    async def __call__(self, p: T) -> T:
+        if p.manufacturer_name in self.manufacturers:
+            self.manufacturers[p.manufacturer_name] += 1
+        else:
+            self.manufacturers[p.manufacturer_name] = 1
+        return p
+
+    def get_stats(self) -> dict[str, int]:
+        return dict(self.manufacturers)
 
 
 class AsyncPipeline(Generic[T]):
