@@ -1,8 +1,10 @@
-import logging
-from typing import AsyncIterator, Iterable, Type, TypeVar, Generic, cast
-from lxml import etree
 import asyncio
+import logging
+from dataclasses import fields
+from typing import AsyncIterator, Type, TypeVar, Generic, cast
+
 import aiofiles
+from lxml import etree
 
 from product_processor.product import Product, Attribute
 
@@ -73,9 +75,10 @@ class AsyncProductXMLReader(Generic[T]):
         attrs_elem = elem.find("attributes")
         if attrs_elem is not None:
             for attr_elem in attrs_elem.findall("attribute"):
-                name = attr_elem.findtext("name") or ""
-                value = attr_elem.findtext("value") or ""
-                attributes.append(Attribute(name=name, value=value))
+                name = attr_elem.find("attribute_name").text or ""
+                value = attr_elem.find("attribute_value").text or ""
+                if name and value:
+                    attributes.append(Attribute(name=name, value=value))
         kwargs["attributes"] = attributes
 
         return self.product_cls(**kwargs)
