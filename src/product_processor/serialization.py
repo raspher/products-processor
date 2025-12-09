@@ -62,9 +62,9 @@ class AsyncProductXMLReader(Generic[T]):
             if origin in (list, List) and args and args[0] is Attribute:
                 attrs: list[Attribute] = []
                 for attr_elem in child.findall("attribute"):
-                    name_el = attr_elem.find("name")
-                    value_el = attr_elem.find("value")
-                    if name_el is not None and value_el is not None and name_el.text and value_el.text:
+                    name_el = attr_elem.find("attribute_name")
+                    value_el = attr_elem.find("attribute_value")
+                    if name_el is not None and value_el is not None:
                         attrs.append(Attribute(name=name_el.text.strip(), value=value_el.text.strip()))
                 kwargs[field_name] = attrs
                 continue
@@ -115,8 +115,8 @@ class AsyncProductXMLWriter(Generic[T]):
             if field.name.startswith("attributes") and isinstance(value, list):
                 for attr in product.attributes:
                     attr_elem = etree.SubElement(child, "attribute")
-                    etree.SubElement(attr_elem, "name").text = attr.name
-                    etree.SubElement(attr_elem, "value").text = attr.value
+                    etree.SubElement(attr_elem, "attribute_name").text = attr.name
+                    etree.SubElement(attr_elem, "attribute_value").text = attr.value
                 continue
 
             child.text = str(value)
